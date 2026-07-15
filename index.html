@@ -44,7 +44,9 @@
   table.cal th{font-size:11px;color:var(--muted);font-weight:500;padding:4px 2px;text-align:center;}
   table.cal td{border:1px solid var(--border);vertical-align:top;padding:4px;height:70px;position:relative;}
   .quarter-grid table.cal td{height:52px;padding:3px;font-size:11px;}
+  table.cal td.wknd{background:#eceef5;}
   table.cal td.pad{background:#fafafa;color:#c7cad1;}
+  table.cal td.pad.wknd{background:#eef0f6;}
   table.cal td:hover{background:#fbfbff;cursor:pointer;}
   table.cal td.drop-target{background:#e0e7ff;outline:2px dashed var(--accent);outline-offset:-2px;}
   .pill[data-id]{cursor:grab;}
@@ -375,6 +377,8 @@
         const dStr = fmtDate(cell.date);
         const isToday = dStr === todayStr;
         const classes = [''];
+        const wd = cell.date.getDay(); // 0=Dom, 1=Seg ... 5=Sex, 6=Sáb
+        if(wd===5 || wd===6) classes.push('wknd');
         if(cell.pad) classes.push('pad');
         if(isToday) classes.push('today');
         const dayEvents = cell.pad ? [] : eventsForDate(dStr);
