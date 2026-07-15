@@ -304,7 +304,7 @@
 
   function seedEvents(){
     const y = new Date().getFullYear(), m = new Date().getMonth();
-    function d(mo, day){ return new Date(y, mo, day).toISOString().slice(0,10); }
+    function d(mo, day){ return fmtDate(new Date(y, mo, day)); }
     return [
       {id:cuid(), date:d(m,3),  title:'Newsletter semanal #28', type:'newsletter', description:'Resumo de novidades da semana + destaque de blog.'},
       {id:cuid(), date:d(m,5),  title:'Post LinkedIn — dica de faturação', type:'social', description:'Carrossel com 5 dicas rápidas.'},
@@ -328,7 +328,9 @@
   function cuid(){ return 'e'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
 
   // ---------- rendering ----------
-  function fmtDate(dt){ return dt.toISOString().slice(0,10); }
+  // Formata em data LOCAL (não UTC). Usar toISOString() aqui provocava um
+  // desvio de um dia em fusos com offset positivo (ex.: Portugal no verão).
+  function fmtDate(dt){ return dt.getFullYear()+'-'+pad2(dt.getMonth()+1)+'-'+pad2(dt.getDate()); }
   function pad2(n){ return n<10?'0'+n:''+n; }
 
   function buildMonthMatrix(year, month){
