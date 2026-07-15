@@ -46,6 +46,10 @@
   .quarter-grid table.cal td{height:52px;padding:3px;font-size:11px;}
   table.cal td.pad{background:#fafafa;color:#c7cad1;}
   table.cal td:hover{background:#fbfbff;cursor:pointer;}
+  table.cal td.drop-target{background:#e0e7ff;outline:2px dashed var(--accent);outline-offset:-2px;}
+  .pill[data-id]{cursor:grab;}
+  .pill[data-id]:active{cursor:grabbing;}
+  .pill.dragging{opacity:.45;}
   table.cal .daynum{font-size:12px;color:var(--muted);font-weight:600;}
   table.cal td.today .daynum{color:var(--accent);}
   table.cal td.today{background:var(--accent-light);}
@@ -434,13 +438,38 @@
         if(e.target.classList.contains('pill')) return;
         openEventModal(null, td.dataset.date);
       });
+      // ----- drop target (arrastar evento para outro dia) -----
+      td.addEventListener('dragover', (e)=>{
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        td.classList.add('drop-target');
+      });
+      td.addEventListener('dragleave', ()=> td.classList.remove('drop-target'));
+      td.addEventListener('drop', async (e)=>{
+        e.preventDefault();
+        td.classList.remove('drop-target');
+        const id = e.dataTransfer.getData('text/plain');
+        const ev = events.find(x=>x.id===id);
+        const newDate = td.dataset.date;
+        if(!ev || !newDate || ev.date===newDate) return;
+        ev.date = newDate;
+        render();
+        await persist({action:'upsert', event:ev});
+      });
     });
     document.querySelectorAll('.pill[data-id]').forEach(p=>{
+      p.setAttribute('draggable', 'true');
       p.addEventListener('click', (e)=>{
         e.stopPropagation();
         const ev = events.find(x=>x.id===p.dataset.id);
         if(ev) openEventModal(ev);
       });
+      p.addEventListener('dragstart', (e)=>{
+        e.dataTransfer.setData('text/plain', p.dataset.id);
+        e.dataTransfer.effectAllowed = 'move';
+        p.classList.add('dragging');
+      });
+      p.addEventListener('dragend', ()=> p.classList.remove('dragging'));
     });
   }
 
