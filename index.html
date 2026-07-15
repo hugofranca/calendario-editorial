@@ -378,7 +378,7 @@
         const isToday = dStr === todayStr;
         const classes = [''];
         const wd = cell.date.getDay(); // 0=Dom, 1=Seg ... 5=Sex, 6=Sáb
-        if(wd===5 || wd===6) classes.push('wknd');
+        if(wd===6 || wd===0) classes.push('wknd');
         if(cell.pad) classes.push('pad');
         if(isToday) classes.push('today');
         const dayEvents = cell.pad ? [] : eventsForDate(dStr);
