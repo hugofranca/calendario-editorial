@@ -1,28 +1,79 @@
 /**
- * Backend do Calendário Editorial — Google Apps Script Web App.
+ * Backend do Calendário Editorial — Google Apps Script (HtmlService).
  *
- * Guarda os eventos numa folha ("Eventos") da Google Sheet a que este
- * script está associado, e expõe uma API JSON simples:
+ * A app é SERVIDA por este script (doGet devolve a página) e os dados
+ * são lidos/gravados através de funções chamadas do cliente via
+ * google.script.run — sem fetch, sem CORS. O acesso é restrito ao
+ * domínio visma.com pela configuração da implementação (Web App).
  *
- *   GET  /exec                       -> [ {id,date,title,type,description}, ... ]
- *   POST /exec  {action:'upsert', event:{...}}   -> insere/atualiza por id
- *   POST /exec  {action:'delete', id:'...'}       -> elimina por id
- *   POST /exec  {action:'replace', events:[...]}  -> substitui tudo (import)
- *
- * Todas as respostas de escrita devolvem { ok:true, events:[...] } com a
- * lista completa e atualizada, para o cliente reconciliar o estado.
+ * Funções chamáveis pelo cliente:
+ *   listEvents()            -> [ {id,date,title,type,description}, ... ]
+ *   upsertEvent(ev)         -> { ok:true, events:[...] }
+ *   deleteEvent(id)         -> { ok:true, events:[...] }
+ *   replaceEvents(list)     -> { ok:true, events:[...] }
  *
  * SETUP (ver README.md):
  *   1. Cria uma Google Sheet nova.
- *   2. Extensões -> Apps Script, cola este ficheiro, guarda.
- *   3. Implementar -> Nova implementação -> Tipo: Aplicação Web.
- *      Executar como: Eu.   Quem tem acesso: Qualquer pessoa.
- *   4. Copia o URL /exec e cola no API_URL do index.html.
+ *   2. Extensões -> Apps Script.
+ *   3. Cola este ficheiro em Code.gs.
+ *   4. Cria um ficheiro HTML chamado exatamente "Index" e cola nele todo
+ *      o conteúdo do index.html.
+ *   5. Implementar -> Nova implementação -> Aplicação Web.
+ *      Executar como: Eu.   Quem tem acesso: Qualquer pessoa da Visma.
  */
 
 var SHEET_NAME = 'Eventos';
 var HEADERS = ['id', 'date', 'title', 'type', 'description'];
 
+// ---------- página ----------
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Calendário Editorial')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+}
+
+// ---------- funções chamáveis (google.script.run) ----------
+function listEvents() {
+  return readAll(getSheet());
+}
+
+function upsertEvent(ev) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sh = getSheet();
+    upsert(sh, ev);
+    return { ok: true, events: readAll(sh) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteEvent(id) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sh = getSheet();
+    remove(sh, id);
+    return { ok: true, events: readAll(sh) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function replaceEvents(list) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sh = getSheet();
+    replaceAll(sh, list || []);
+    return { ok: true, events: readAll(sh) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------- acesso à folha ----------
 function getSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(SHEET_NAME);
@@ -32,7 +83,7 @@ function getSheet() {
   if (sh.getLastRow() === 0) {
     sh.appendRow(HEADERS);
   }
-  // Força todas as colunas a texto para as datas 'yyyy-mm-dd' não serem
+  // Força as colunas a texto para as datas 'yyyy-mm-dd' não serem
   // convertidas automaticamente em objetos Date pela folha.
   sh.getRange(1, 1, sh.getMaxRows(), HEADERS.length).setNumberFormat('@');
   return sh;
@@ -77,11 +128,10 @@ function findRow(sh, id) {
 function upsert(sh, ev) {
   if (!ev || !ev.id) throw new Error('evento sem id');
   var row = findRow(sh, ev.id);
-  var data = [rowFromEvent(ev)];
   if (row === -1) {
     sh.appendRow(rowFromEvent(ev));
   } else {
-    sh.getRange(row, 1, 1, HEADERS.length).setValues(data);
+    sh.getRange(row, 1, 1, HEADERS.length).setValues([rowFromEvent(ev)]);
   }
 }
 
@@ -96,39 +146,5 @@ function replaceAll(sh, list) {
   if (list && list.length) {
     var rows = list.map(rowFromEvent);
     sh.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
-  }
-}
-
-function json(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doGet(e) {
-  try {
-    return json(readAll(getSheet()));
-  } catch (err) {
-    return json({ error: String(err) });
-  }
-}
-
-function doPost(e) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var sh = getSheet();
-    var req = JSON.parse(e.postData.contents);
-    switch (req.action) {
-      case 'upsert':  upsert(sh, req.event); break;
-      case 'delete':  remove(sh, req.id); break;
-      case 'replace': replaceAll(sh, req.events || []); break;
-      default: return json({ error: 'ação desconhecida: ' + req.action });
-    }
-    return json({ ok: true, events: readAll(sh) });
-  } catch (err) {
-    return json({ error: String(err) });
-  } finally {
-    lock.releaseLock();
   }
 }

@@ -196,15 +196,15 @@
   const DOW = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 
   // ====================================================================
-  // BACKEND PARTILHADO (Google Apps Script Web App)
+  // BACKEND PARTILHADO (Google Apps Script — HtmlService)
   // --------------------------------------------------------------------
-  // Cola aqui o URL /exec do teu Web App para partilhar os dados entre
-  // toda a equipa. Enquanto estiver vazio ('') a app funciona em MODO
-  // LOCAL (dados guardados só neste navegador, via localStorage).
-  // Instruções de setup: ver README.md do repositório.
-  const API_URL = '';
-  // ====================================================================
-  const SHARED = !!API_URL;
+  // Esta app é servida pelo próprio Apps Script (restrito ao domínio
+  // visma.com por SSO Google) e fala com o servidor via google.script.run.
+  // Quando aberta FORA do Apps Script (ficheiro local / GitHub Pages),
+  // google.script.run não existe e a app corre em MODO LOCAL (dados só
+  // neste navegador, via localStorage). Setup: ver README.md.
+  const HAS_GAS = (typeof google !== 'undefined' && google.script && google.script.run);
+  const SHARED = !!HAS_GAS;
 
   const LS_EVENTS = 'editorial_calendar_events_v1';    // cache local / fallback offline
   const LS_SETTINGS = 'editorial_calendar_settings_v1';
@@ -235,21 +235,27 @@
     return seedEvents();
   }
 
-  // ---------- camada de API (Apps Script) ----------
+  // ---------- camada de API (google.script.run) ----------
+  function gsRun(fnName){
+    const args = Array.prototype.slice.call(arguments, 1);
+    return new Promise((resolve, reject)=>{
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(err => reject(new Error((err && err.message) || String(err))))
+        [fnName].apply(google.script.run, args);
+    });
+  }
   async function apiList(){
-    const res = await fetch(API_URL, {method:'GET'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    if(data && data.error) throw new Error(data.error);
+    const data = await gsRun('listEvents');
     if(!Array.isArray(data)) throw new Error('resposta inesperada');
     return data;
   }
   async function apiPost(payload){
-    // Sem cabeçalho Content-Type de propósito: o corpo em texto simples
-    // evita o "preflight" CORS que o Apps Script não trata.
-    const res = await fetch(API_URL, {method:'POST', body: JSON.stringify(payload)});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
+    let data;
+    if(payload.action === 'upsert')       data = await gsRun('upsertEvent', payload.event);
+    else if(payload.action === 'delete')  data = await gsRun('deleteEvent', payload.id);
+    else if(payload.action === 'replace') data = await gsRun('replaceEvents', payload.events);
+    else throw new Error('ação desconhecida: ' + payload.action);
     if(data && data.error) throw new Error(data.error);
     return data;
   }
@@ -289,7 +295,7 @@
   function setStatus(state, detail){
     const el = document.getElementById('syncStatus');
     if(!el) return;
-    if(!SHARED){ el.textContent='💾 Local'; el.className='sync local'; el.title='Modo local — dados só neste navegador. Configura o API_URL para partilhar.'; return; }
+    if(!SHARED){ el.textContent='💾 Local'; el.className='sync local'; el.title='Modo local — dados só neste navegador (app aberta fora do Apps Script).'; return; }
     if(state==='loading'){ el.textContent='⏳ A carregar…'; el.className='sync'; el.title=''; }
     else if(state==='saving'){ el.textContent='⏳ A guardar…'; el.className='sync'; el.title=''; }
     else if(state==='ok'){ el.textContent='☁ Partilhado'; el.className='sync ok'; el.title='Ligado à folha partilhada.'; }
