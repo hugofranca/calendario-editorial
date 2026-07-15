@@ -103,8 +103,10 @@
   </header>
 
   <div class="filters">
-    <label><input type="checkbox" class="catFilter" value="produto" checked> Produto</label>
-    <label><input type="checkbox" class="catFilter" value="marketing" checked> Marketing</label>
+    <div class="seg" id="catToggle">
+      <button data-cat="produto" class="active">Produto</button>
+      <button data-cat="marketing" class="active">Marketing</button>
+    </div>
   </div>
 
   <div class="legend" id="legend"></div>
@@ -623,11 +625,12 @@
     render();
   });
 
-  document.querySelectorAll('.catFilter').forEach(cb=>{
-    cb.addEventListener('change', ()=>{
-      catFilter = new Set(Array.from(document.querySelectorAll('.catFilter:checked')).map(x=>x.value));
-      render();
-    });
+  document.getElementById('catToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-cat]');
+    if(!btn) return;
+    btn.classList.toggle('active');
+    catFilter = new Set(Array.from(document.querySelectorAll('#catToggle button.active')).map(b=>b.dataset.cat));
+    render();
   });
 
   // ---------- export / import ----------
