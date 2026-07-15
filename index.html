@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendário Editorial</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --panel:#ffffff; --border:#e3e6ee; --text:#1f2430; --muted:#6b7280;
+    --accent:#4f46e5; --accent-light:#eef0fe;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  .app{max-width:1400px;margin:0 auto;padding:20px 24px 60px;}
+  header.top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;}
+  header.top h1{font-size:22px;margin:0;}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--border);background:#fff;padding:8px 14px;color:var(--text);}
+  button:hover{background:#f1f2f9;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  button.primary:hover{background:#4338ca;}
+  button.danger{background:#fff;color:#dc2626;border-color:#f3c6c6;}
+  button.danger:hover{background:#fee2e2;}
+  button.ghost{border:none;background:transparent;padding:6px 10px;}
+  .seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .seg button{border:none;border-radius:0;background:#fff;}
+  .seg button.active{background:var(--accent);color:#fff;}
+  .nav{display:flex;align-items:center;gap:6px;}
+  .nav .label{min-width:170px;text-align:center;font-weight:600;}
+  .sync{font-size:12.5px;color:var(--muted);padding:4px 8px;border-radius:8px;white-space:nowrap;}
+  .sync.ok{color:#047857;}
+  .sync.err{color:#b91c1c;cursor:help;}
+  .sync.local{color:#6b7280;}
+  .filters{display:flex;gap:14px;align-items:center;margin:6px 0 16px;flex-wrap:wrap;}
+  .filters label{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);cursor:pointer;}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0 18px;font-size:12.5px;color:var(--muted);}
+  .legend span.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+  .legend .grp{font-weight:600;color:var(--text);margin-right:4px;}
+
+  .quarter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  .month-block{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px;}
+  .month-block h3{margin:0 0 8px;font-size:15px;text-align:center;}
+  table.cal{width:100%;border-collapse:collapse;table-layout:fixed;}
+  table.cal th{font-size:11px;color:var(--muted);font-weight:500;padding:4px 2px;text-align:center;}
+  table.cal td{border:1px solid var(--border);vertical-align:top;padding:4px;height:70px;position:relative;}
+  .quarter-grid table.cal td{height:52px;padding:3px;font-size:11px;}
+  table.cal td.pad{background:#fafafa;color:#c7cad1;}
+  table.cal td:hover{background:#fbfbff;cursor:pointer;}
+  table.cal .daynum{font-size:12px;color:var(--muted);font-weight:600;}
+  table.cal td.today .daynum{color:var(--accent);}
+  table.cal td.today{background:var(--accent-light);}
+  .pill{display:block;background:#eee;border-radius:5px;padding:1px 5px;margin-top:2px;font-size:10.5px;line-height:1.4;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;}
+  .month-view .cal td{height:110px;padding:6px;}
+  .month-view .pill{font-size:12px;padding:2px 6px;margin-top:3px;}
+
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,20,30,.45);align-items:center;justify-content:center;z-index:50;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:#fff;border-radius:14px;padding:22px 24px;width:420px;max-width:92vw;max-height:88vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.2);}
+  .modal h2{margin:0 0 14px;font-size:18px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px;font-weight:600;}
+  .field input, .field select, .field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;background:#fbfbfd;}
+  .field textarea{min-height:90px;resize:vertical;}
+  .modal-actions{display:flex;justify-content:space-between;gap:8px;margin-top:18px;flex-wrap:wrap;}
+  .modal-actions .left{display:flex;gap:8px;}
+  .modal-actions .right{display:flex;gap:8px;}
+  .asana-row{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+  .msg{font-size:12.5px;margin-top:8px;padding:8px 10px;border-radius:8px;display:none;}
+  .msg.ok{display:block;background:#ecfdf5;color:#047857;}
+  .msg.err{display:block;background:#fef2f2;color:#b91c1c;}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  .close-x{position:absolute;top:14px;right:16px;background:none;border:none;font-size:18px;color:var(--muted);}
+  .modal{position:relative;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>📅 Calendário Editorial</h1>
+    <div class="toolbar">
+      <div class="seg" id="viewToggle">
+        <button data-view="month" class="active">Mensal</button>
+        <button data-view="quarter">Trimestral</button>
+      </div>
+      <div class="nav">
+        <button class="ghost" id="prevBtn">←</button>
+        <div class="label" id="periodLabel"></div>
+        <button class="ghost" id="nextBtn">→</button>
+        <button id="todayBtn">Hoje</button>
+      </div>
+      <button class="primary" id="newBtn">+ Novo</button>
+      <button id="refreshBtn" title="Atualizar com os dados mais recentes de todos">↻</button>
+      <button id="exportBtn">Exportar</button>
+      <button id="importBtn">Importar</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+      <button id="settingsBtn">⚙ Asana</button>
+      <span class="sync" id="syncStatus"></span>
+    </div>
+  </header>
+
+  <div class="filters">
+    <label><input type="checkbox" class="catFilter" value="produto" checked> Produto</label>
+    <label><input type="checkbox" class="catFilter" value="marketing" checked> Marketing</label>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div id="calendarArea"></div>
+</div>
+
+<!-- Event modal -->
+<div class="modal-overlay" id="eventModalOverlay">
+  <div class="modal">
+    <button class="close-x" data-close>✕</button>
+    <h2 id="eventModalTitle">Novo conteúdo</h2>
+    <div class="field">
+      <label>Título</label>
+      <input type="text" id="f_title" placeholder="Ex: Lançamento da funcionalidade X">
+    </div>
+    <div class="field">
+      <label>Data</label>
+      <input type="date" id="f_date">
+    </div>
+    <div class="field">
+      <label>Categoria</label>
+      <select id="f_cat">
+        <option value="produto">Produto</option>
+        <option value="marketing">Marketing</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Tipo</label>
+      <select id="f_type"></select>
+    </div>
+    <div class="field">
+      <label>Detalhes</label>
+      <textarea id="f_desc" placeholder="Notas, links, responsável, canais..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="danger" id="deleteBtn" style="display:none">Eliminar</button>
+      </div>
+      <div class="right">
+        <button data-close>Cancelar</button>
+        <button class="primary" id="saveBtn">Guardar</button>
+      </div>
+    </div>
+    <div class="asana-row">
+      <button id="asanaBtn" style="width:100%">➕ Criar tarefa no Asana</button>
+      <div class="hint">Usa o teu Asana Personal Access Token (configurado em ⚙ Asana). O token fica apenas no teu navegador.</div>
+      <div class="msg" id="asanaMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settingsModalOverlay">
+  <div class="modal">
+    <button class="close-x" data-close>✕</button>
+    <h2>Integração Asana</h2>
+    <div class="field">
+      <label>Personal Access Token</label>
+      <input type="password" id="s_token" placeholder="cole aqui o seu token">
+      <div class="hint">Gerar em: Asana → Definições → Apps → Developer apps → Personal access tokens. Guardado apenas neste navegador (localStorage), nunca partilhado.</div>
+    </div>
+    <div class="field">
+      <label>ID do projeto (project gid)</label>
+      <input type="text" id="s_project" placeholder="1206057750863686">
+      <div class="hint">Pré-preenchido com o projeto "Marketing" do workspace.</div>
+    </div>
+    <div class="modal-actions">
+      <div class="left"></div>
+      <div class="right">
+        <button data-close>Cancelar</button>
+        <button class="primary" id="saveSettingsBtn">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const TYPES = {
+    novidade_produto:      {label:'Novidades de produto', cat:'produto', color:'#2563eb'},
+    atualizacao_produto:   {label:'Atualizações de produto', cat:'produto', color:'#0891b2'},
+    at_comunicado:         {label:'Comunicado Autoridade Tributária', cat:'produto', color:'#b45309'},
+    comunicacao_cliente:   {label:'Comunicação a clientes (manutenções, etc.)', cat:'produto', color:'#7c3aed'},
+    campanha_funcionalidade:{label:'Campanha de nova funcionalidade', cat:'produto', color:'#0d9488'},
+    blog:                  {label:'Artigo de blog', cat:'marketing', color:'#16a34a'},
+    newsletter:            {label:'Newsletter semanal', cat:'marketing', color:'#65a30d'},
+    social:                {label:'Publicação em redes sociais', cat:'marketing', color:'#db2777'},
+    ads:                   {label:'Campanha de anúncios (Google/Meta/Reddit)', cat:'marketing', color:'#ea580c'},
+    webinar:               {label:'Webinar', cat:'marketing', color:'#9333ea'}
+  };
+  const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const DOW = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+
+  // ====================================================================
+  // BACKEND PARTILHADO (Google Apps Script Web App)
+  // --------------------------------------------------------------------
+  // Cola aqui o URL /exec do teu Web App para partilhar os dados entre
+  // toda a equipa. Enquanto estiver vazio ('') a app funciona em MODO
+  // LOCAL (dados guardados só neste navegador, via localStorage).
+  // Instruções de setup: ver README.md do repositório.
+  const API_URL = '';
+  // ====================================================================
+  const SHARED = !!API_URL;
+
+  const LS_EVENTS = 'editorial_calendar_events_v1';    // cache local / fallback offline
+  const LS_SETTINGS = 'editorial_calendar_settings_v1';
+
+  let events = [];
+  let settings = loadSettings();
+  let view = 'month'; // 'month' | 'quarter'
+  let anchor = new Date(); anchor.setDate(1); anchor.setHours(0,0,0,0);
+  let catFilter = new Set(['produto','marketing']);
+  let editingId = null;
+
+  // ---------- persistência ----------
+  function loadSettings(){
+    try{
+      const raw = localStorage.getItem(LS_SETTINGS);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return {token:'', project:'1206057750863686'};
+  }
+  function saveSettings(){ localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+
+  function cacheLocal(){ try{ localStorage.setItem(LS_EVENTS, JSON.stringify(events)); }catch(e){} }
+  function loadCacheOrSeed(){
+    try{
+      const raw = localStorage.getItem(LS_EVENTS);
+      if(raw){ const arr = JSON.parse(raw); if(Array.isArray(arr)) return arr; }
+    }catch(e){}
+    return seedEvents();
+  }
+
+  // ---------- camada de API (Apps Script) ----------
+  async function apiList(){
+    const res = await fetch(API_URL, {method:'GET'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(data && data.error) throw new Error(data.error);
+    if(!Array.isArray(data)) throw new Error('resposta inesperada');
+    return data;
+  }
+  async function apiPost(payload){
+    // Sem cabeçalho Content-Type de propósito: o corpo em texto simples
+    // evita o "preflight" CORS que o Apps Script não trata.
+    const res = await fetch(API_URL, {method:'POST', body: JSON.stringify(payload)});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(data && data.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function refreshEvents(){
+    if(!SHARED){ events = loadCacheOrSeed(); return; }
+    setStatus('loading');
+    try{
+      events = await apiList();
+      cacheLocal();
+      setStatus('ok');
+    }catch(e){
+      events = loadCacheOrSeed();
+      setStatus('err', e.message);
+    }
+  }
+
+  // Aplica localmente + sincroniza com o servidor. `optimistic` já foi
+  // renderizado antes de chamar; aqui reconciliamos com a verdade do servidor.
+  async function persist(payload){
+    cacheLocal();
+    if(!SHARED) return true;
+    setStatus('saving');
+    try{
+      const r = await apiPost(payload);
+      if(r && Array.isArray(r.events)){ events = r.events; cacheLocal(); render(); }
+      setStatus('ok');
+      return true;
+    }catch(e){
+      setStatus('err', e.message);
+      alert('Não foi possível gravar no servidor partilhado ('+e.message+').\n'
+        + 'A alteração pode não ter ficado visível para os outros. Usa o botão ↻ para verificar.');
+      return false;
+    }
+  }
+
+  function setStatus(state, detail){
+    const el = document.getElementById('syncStatus');
+    if(!el) return;
+    if(!SHARED){ el.textContent='💾 Local'; el.className='sync local'; el.title='Modo local — dados só neste navegador. Configura o API_URL para partilhar.'; return; }
+    if(state==='loading'){ el.textContent='⏳ A carregar…'; el.className='sync'; el.title=''; }
+    else if(state==='saving'){ el.textContent='⏳ A guardar…'; el.className='sync'; el.title=''; }
+    else if(state==='ok'){ el.textContent='☁ Partilhado'; el.className='sync ok'; el.title='Ligado à folha partilhada.'; }
+    else if(state==='err'){ el.textContent='⚠ Sem ligação'; el.className='sync err'; el.title='Falha de ligação ao servidor: '+(detail||'')+' — a mostrar cópia local.'; }
+  }
+
+  function seedEvents(){
+    const y = new Date().getFullYear(), m = new Date().getMonth();
+    function d(mo, day){ return new Date(y, mo, day).toISOString().slice(0,10); }
+    return [
+      {id:cuid(), date:d(m,3),  title:'Newsletter semanal #28', type:'newsletter', description:'Resumo de novidades da semana + destaque de blog.'},
+      {id:cuid(), date:d(m,5),  title:'Post LinkedIn — dica de faturação', type:'social', description:'Carrossel com 5 dicas rápidas.'},
+      {id:cuid(), date:d(m,8),  title:'Comunicado: nova versão do SAF-T', type:'at_comunicado', description:'Impacto e prazos para clientes.'},
+      {id:cuid(), date:d(m,10), title:'Artigo de blog: IVA em 2026', type:'blog', description:'SEO: "regras de IVA 2026".'},
+      {id:cuid(), date:d(m,12), title:'Janela de manutenção programada', type:'comunicacao_cliente', description:'Email + banner in-app, domingo 02h-04h.'},
+      {id:cuid(), date:d(m,15), title:'Lançamento: exportação automática', type:'novidade_produto', description:'Anúncio in-app + email + changelog.'},
+      {id:cuid(), date:d(m,17), title:'Campanha Google Ads — período de faturas', type:'ads', description:'Orçamento 500€, 2 semanas.'},
+      {id:cuid(), date:d(m,20), title:'Webinar: automatize a faturação', type:'webinar', description:'Registo aberto, 45 min + Q&A.'},
+      {id:cuid(), date:d(m,22), title:'Campanha: novo módulo de recibos', type:'campanha_funcionalidade', description:'Landing + sequência de emails.'},
+      {id:cuid(), date:d(m,25), title:'Atualização de produto — melhorias de performance', type:'atualizacao_produto', description:'Changelog + nota de release.'},
+      {id:cuid(), date:d(m,27), title:'Newsletter semanal #29', type:'newsletter', description:''},
+      {id:cuid(), date:d(m+1,4), title:'Post Instagram — bastidores da equipa', type:'social', description:''},
+      {id:cuid(), date:d(m+1,9), title:'Webinar: fecho de trimestre sem stress', type:'webinar', description:''},
+      {id:cuid(), date:d(m+1,14), title:'Comunicado da Autoridade Tributária — prazo entrega', type:'at_comunicado', description:''},
+      {id:cuid(), date:d(m+1,18), title:'Campanha Meta Ads — captação de leads', type:'ads', description:''},
+      {id:cuid(), date:d(m+2,2), title:'Artigo de blog: checklist fim de ano fiscal', type:'blog', description:''},
+      {id:cuid(), date:d(m+2,11), title:'Novidade de produto: app mobile', type:'novidade_produto', description:''}
+    ];
+  }
+  function cuid(){ return 'e'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+
+  // ---------- rendering ----------
+  function fmtDate(dt){ return dt.toISOString().slice(0,10); }
+  function pad2(n){ return n<10?'0'+n:''+n; }
+
+  function buildMonthMatrix(year, month){
+    const first = new Date(year, month, 1);
+    let startWeekday = (first.getDay()+6)%7; // Monday=0
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const cells = [];
+    for(let i=0;i<startWeekday;i++){
+      const dayNum = new Date(year, month, 0).getDate() - startWeekday + 1 + i;
+      cells.push({date:new Date(year, month-1, dayNum), pad:true});
+    }
+    for(let d=1; d<=daysInMonth; d++){
+      cells.push({date:new Date(year, month, d), pad:false});
+    }
+    while(cells.length % 7 !== 0 || cells.length < 42){
+      const idx = cells.length - (startWeekday+daysInMonth);
+      cells.push({date:new Date(year, month+1, idx+1), pad:true});
+      if(cells.length>=42) break;
+    }
+    const weeks = [];
+    for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
+    return weeks;
+  }
+
+  function eventsForDate(dateStr){
+    return events.filter(e => e.date === dateStr && TYPES[e.type] && catFilter.has(TYPES[e.type].cat));
+  }
+
+  function renderMonthTable(year, month, compact){
+    const weeks = buildMonthMatrix(year, month);
+    const todayStr = fmtDate(new Date());
+    let html = '<table class="cal"><thead><tr>' + DOW.map(d=>'<th>'+d+'</th>').join('') + '</tr></thead><tbody>';
+    weeks.forEach(week=>{
+      html += '<tr>';
+      week.forEach(cell=>{
+        const dStr = fmtDate(cell.date);
+        const isToday = dStr === todayStr;
+        const classes = [''];
+        if(cell.pad) classes.push('pad');
+        if(isToday) classes.push('today');
+        const dayEvents = cell.pad ? [] : eventsForDate(dStr);
+        const maxShow = compact ? 2 : 4;
+        let pillsHtml = dayEvents.slice(0,maxShow).map(ev=>{
+          const t = TYPES[ev.type];
+          return `<span class="pill" style="background:${t.color}" data-id="${ev.id}" title="${escapeHtml(t.label)}: ${escapeHtml(ev.title)}">${escapeHtml(ev.title)}</span>`;
+        }).join('');
+        if(dayEvents.length > maxShow){
+          pillsHtml += `<span class="pill" style="background:#9ca3af">+${dayEvents.length-maxShow} mais</span>`;
+        }
+        html += `<td class="${classes.join(' ')}" data-date="${dStr}"><div class="daynum">${cell.date.getDate()}</div>${pillsHtml}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function render(){
+    document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+    const area = document.getElementById('calendarArea');
+    const label = document.getElementById('periodLabel');
+    if(view === 'month'){
+      const y = anchor.getFullYear(), m = anchor.getMonth();
+      label.textContent = MONTH_NAMES[m] + ' ' + y;
+      area.className = 'month-view';
+      area.innerHTML = renderMonthTable(y, m, false);
+    } else {
+      const y = anchor.getFullYear(), m = anchor.getMonth();
+      const qStart = Math.floor(m/3)*3;
+      label.textContent = 'T' + (qStart/3+1) + ' — ' + MONTH_NAMES[qStart] + ' a ' + MONTH_NAMES[qStart+2] + ' ' + y;
+      area.className = '';
+      let html = '<div class="quarter-grid">';
+      for(let i=0;i<3;i++){
+        html += `<div class="month-block"><h3>${MONTH_NAMES[qStart+i]}</h3>${renderMonthTable(y, qStart+i, true)}</div>`;
+      }
+      html += '</div>';
+      area.innerHTML = html;
+    }
+    renderLegend();
+    attachCellHandlers();
+  }
+
+  function renderLegend(){
+    const el = document.getElementById('legend');
+    const groups = {produto:'Produto', marketing:'Marketing'};
+    let html = '';
+    Object.entries(groups).forEach(([catKey, catLabel])=>{
+      html += `<span class="grp">${catLabel}:</span>`;
+      Object.entries(TYPES).filter(([k,t])=>t.cat===catKey).forEach(([k,t])=>{
+        html += `<span><span class="dot" style="background:${t.color}"></span>${t.label}</span>`;
+      });
+    });
+    el.innerHTML = html;
+  }
+
+  function attachCellHandlers(){
+    document.querySelectorAll('td[data-date]').forEach(td=>{
+      td.addEventListener('click', (e)=>{
+        if(e.target.classList.contains('pill')) return;
+        openEventModal(null, td.dataset.date);
+      });
+    });
+    document.querySelectorAll('.pill[data-id]').forEach(p=>{
+      p.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const ev = events.find(x=>x.id===p.dataset.id);
+        if(ev) openEventModal(ev);
+      });
+    });
+  }
+
+  // ---------- modal logic ----------
+  function populateTypeSelect(cat){
+    const sel = document.getElementById('f_type');
+    sel.innerHTML = Object.entries(TYPES).filter(([k,t])=>t.cat===cat)
+      .map(([k,t])=>`<option value="${k}">${t.label}</option>`).join('');
+  }
+
+  function openEventModal(ev, dateStr){
+    editingId = ev ? ev.id : null;
+    document.getElementById('eventModalTitle').textContent = ev ? 'Editar conteúdo' : 'Novo conteúdo';
+    document.getElementById('f_title').value = ev ? ev.title : '';
+    document.getElementById('f_date').value = ev ? ev.date : (dateStr || fmtDate(new Date()));
+    const cat = ev && TYPES[ev.type] ? TYPES[ev.type].cat : 'produto';
+    document.getElementById('f_cat').value = cat;
+    populateTypeSelect(cat);
+    document.getElementById('f_type').value = ev ? ev.type : document.getElementById('f_type').value;
+    document.getElementById('f_desc').value = ev ? ev.description : '';
+    document.getElementById('deleteBtn').style.display = ev ? 'inline-block' : 'none';
+    document.getElementById('asanaMsg').className = 'msg';
+    document.getElementById('asanaMsg').textContent = '';
+    document.getElementById('eventModalOverlay').classList.add('open');
+  }
+  function closeModals(){
+    document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open'));
+  }
+
+  document.getElementById('f_cat').addEventListener('change', (e)=>{
+    populateTypeSelect(e.target.value);
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', async ()=>{
+    const title = document.getElementById('f_title').value.trim();
+    const date = document.getElementById('f_date').value;
+    const type = document.getElementById('f_type').value;
+    const description = document.getElementById('f_desc').value.trim();
+    if(!title || !date){ alert('Preenche pelo menos o título e a data.'); return; }
+    let ev;
+    if(editingId){
+      ev = events.find(x=>x.id===editingId);
+      Object.assign(ev, {title, date, type, description});
+    } else {
+      ev = {id:cuid(), title, date, type, description};
+      events.push(ev);
+    }
+    closeModals();
+    render();
+    await persist({action:'upsert', event:ev});
+  });
+
+  document.getElementById('deleteBtn').addEventListener('click', async ()=>{
+    if(!editingId) return;
+    if(!confirm('Eliminar este conteúdo do calendário?')) return;
+    const id = editingId;
+    events = events.filter(x=>x.id!==id);
+    closeModals();
+    render();
+    await persist({action:'delete', id});
+  });
+
+  document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click', closeModals));
+  document.querySelectorAll('.modal-overlay').forEach(ov=>{
+    ov.addEventListener('click', (e)=>{ if(e.target===ov) closeModals(); });
+  });
+
+  document.getElementById('newBtn').addEventListener('click', ()=> openEventModal(null, fmtDate(new Date())));
+
+  document.getElementById('refreshBtn').addEventListener('click', async ()=>{
+    await refreshEvents();
+    render();
+  });
+
+  // ---------- Asana integration ----------
+  document.getElementById('asanaBtn').addEventListener('click', async ()=>{
+    const msg = document.getElementById('asanaMsg');
+    if(!settings.token || !settings.project){
+      msg.className = 'msg err';
+      msg.textContent = 'Configura primeiro o token e o ID do projeto em "⚙ Asana".';
+      return;
+    }
+    const title = document.getElementById('f_title').value.trim();
+    const date = document.getElementById('f_date').value;
+    const type = document.getElementById('f_type').value;
+    const description = document.getElementById('f_desc').value.trim();
+    if(!title){ msg.className='msg err'; msg.textContent='Escreve um título antes de criar a tarefa.'; return; }
+    msg.className = 'msg'; msg.textContent = 'A criar tarefa no Asana...'; msg.style.display='block';
+    try{
+      const notes = (TYPES[type] ? '['+TYPES[type].label+'] ' : '') + (description||'');
+      const res = await fetch('https://app.asana.com/api/1.0/tasks', {
+        method:'POST',
+        headers:{
+          'Authorization':'Bearer '+settings.token,
+          'Content-Type':'application/json'
+        },
+        body: JSON.stringify({data:{
+          name: title,
+          notes: notes,
+          due_on: date || undefined,
+          projects: [settings.project]
+        }})
+      });
+      const body = await res.json();
+      if(!res.ok){
+        throw new Error((body.errors && body.errors[0] && body.errors[0].message) || ('HTTP '+res.status));
+      }
+      msg.className = 'msg ok';
+      msg.textContent = 'Tarefa criada no Asana ✓';
+      if(body.data && body.data.permalink_url){
+        msg.innerHTML = 'Tarefa criada no Asana ✓ — <a href="'+body.data.permalink_url+'" target="_blank">abrir</a>';
+      }
+    }catch(err){
+      msg.className = 'msg err';
+      msg.textContent = 'Falha ao criar a tarefa (' + err.message + '). Verifica o token, o ID do projeto e a ligação à internet.';
+    }
+  });
+
+  // ---------- settings ----------
+  document.getElementById('settingsBtn').addEventListener('click', ()=>{
+    document.getElementById('s_token').value = settings.token || '';
+    document.getElementById('s_project').value = settings.project || '';
+    document.getElementById('settingsModalOverlay').classList.add('open');
+  });
+  document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
+    settings.token = document.getElementById('s_token').value.trim();
+    settings.project = document.getElementById('s_project').value.trim();
+    saveSettings();
+    closeModals();
+  });
+
+  // ---------- view / nav ----------
+  document.getElementById('viewToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-view]');
+    if(!btn) return;
+    view = btn.dataset.view;
+    render();
+  });
+  document.getElementById('prevBtn').addEventListener('click', ()=>{
+    if(view==='month'){ anchor.setMonth(anchor.getMonth()-1); }
+    else { anchor.setMonth(anchor.getMonth()-3); }
+    render();
+  });
+  document.getElementById('nextBtn').addEventListener('click', ()=>{
+    if(view==='month'){ anchor.setMonth(anchor.getMonth()+1); }
+    else { anchor.setMonth(anchor.getMonth()+3); }
+    render();
+  });
+  document.getElementById('todayBtn').addEventListener('click', ()=>{
+    anchor = new Date(); anchor.setDate(1); anchor.setHours(0,0,0,0);
+    render();
+  });
+
+  document.querySelectorAll('.catFilter').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      catFilter = new Set(Array.from(document.querySelectorAll('.catFilter:checked')).map(x=>x.value));
+      render();
+    });
+  });
+
+  // ---------- export / import ----------
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
+    const blob = new Blob([JSON.stringify(events, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'calendario-editorial-dados.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if(!Array.isArray(data)) throw new Error('formato inválido');
+        if(confirm('Substituir todos os conteúdos atuais pelos ' + data.length + ' importados? (Cancelar para juntar aos existentes)')){
+          events = data;
+        } else {
+          events = events.concat(data);
+        }
+        render();
+        await persist({action:'replace', events});
+      }catch(err){
+        alert('Não foi possível importar o ficheiro: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  // ---------- arranque ----------
+  async function init(){
+    setStatus(SHARED ? 'loading' : 'local');
+    render();
+    await refreshEvents();
+    render();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
